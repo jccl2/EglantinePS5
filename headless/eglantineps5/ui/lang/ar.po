@@ -754,6 +754,10 @@ msgstr "هدف توليد الإطارات"
 msgid "Frame gen type"
 msgstr "نوع توليد الإطارات"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "تخطي تنعيم الحواف في اللعبة"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "توليد الإطارات"

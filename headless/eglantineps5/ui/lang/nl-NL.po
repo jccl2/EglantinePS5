@@ -754,6 +754,10 @@ msgstr "Doel framegeneratie"
 msgid "Frame gen type"
 msgstr "Type framegeneratie"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Anti-aliasing van de game overslaan"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Framegeneratie"

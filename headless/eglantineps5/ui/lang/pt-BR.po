@@ -754,6 +754,10 @@ msgstr "Meta de geração de quadros"
 msgid "Frame gen type"
 msgstr "Tipo de geração de quadros"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Pular o anti-aliasing do jogo"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Geração de quadros"

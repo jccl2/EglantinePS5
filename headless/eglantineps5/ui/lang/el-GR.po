@@ -754,6 +754,10 @@ msgstr "Στόχος παραγωγής καρέ"
 msgid "Frame gen type"
 msgstr "Τύπος παραγωγής καρέ"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Παράλειψη εξομάλυνσης του παιχνιδιού"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Δημιουργία καρέ"

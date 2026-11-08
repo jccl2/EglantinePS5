@@ -754,6 +754,10 @@ msgstr "Kare üretimi hedefi"
 msgid "Frame gen type"
 msgstr "Kare üretimi türü"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Oyunun kenar yumuşatmasını atla"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Kare oluşturma"

@@ -164,6 +164,9 @@ struct Preferences {
     int hud_fields = static_cast<int>(kHudFieldDefault);  // what the overlay shows (hud.h, kHudField*)
     int hud_size = 0;                    // index into kHudSizeKeys: 1x, 1.5x, 2x
     int hud_corner = 0;                  // index into kHudCornerKeys: top left first
+    // Settings > Video: skip the anti-aliasing network some games run on tensor cores (Ocarina of
+    // Time's, video_core/oot_network.h) for a plain upscale; off runs the game's own.
+    bool skip_game_aa = true;
 };
 
 inline int KeyIndex(const std::string& value, const char* const* keys, int count, int fallback) {
@@ -392,6 +395,7 @@ inline Preferences LoadPreferences(const std::string& file = SettingsFile()) {
     result.output = KeyIndex(Settings::String(document, Json::json_pointer("/video/output_resolution")),
                              kOutputKeys, int(std::size(kOutputKeys)), result.output);
     result.frame_gen = Settings::Bool(document, Json::json_pointer("/video/frame_gen"), result.frame_gen);
+    result.skip_game_aa = Settings::Bool(document, Json::json_pointer("/video/skip_game_aa"), result.skip_game_aa);
     result.frame_gen_type = KeyIndex(Settings::String(document, Json::json_pointer("/video/frame_gen_type")),
                                      kFrameGenTypeKeys, int(std::size(kFrameGenTypeKeys)), result.frame_gen_type);
     result.frame_gen_target = KeyIndex(
@@ -444,6 +448,7 @@ inline bool SavePreferences(const Preferences& value, const std::string& file = 
     document["video"]["refresh_rate"] = kRefreshKeys[value.refresh];
     document["video"]["output_resolution"] = kOutputKeys[value.output];
     document["video"]["frame_gen"] = value.frame_gen;
+    document["video"]["skip_game_aa"] = value.skip_game_aa;
     document["video"]["frame_gen_type"] = kFrameGenTypeKeys[value.frame_gen_type];
     document["video"]["frame_gen_target"] = kFrameGenTargetKeys[value.frame_gen_target];
     document["video"]["frame_gen_multiplier"] = kFrameGenMultiplierKeys[value.frame_gen_multiplier];

@@ -754,6 +754,10 @@ msgstr "フレーム生成の目標"
 msgid "Frame gen type"
 msgstr "フレーム生成の方式"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "ゲームのアンチエイリアスを省略"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "フレーム生成"

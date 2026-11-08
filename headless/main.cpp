@@ -1117,6 +1117,9 @@ int main(int argc, char** argv) {
             static_assert(std::size(filters) == std::size(Eden::kUpscalingFilterKeys));
             // Settings > Video, with what the game does differently (Library > Game settings > Video).
             const auto video = Eden::PreferencesFor(eden_game_title_id(guest));
+            // Settings > Video > Skip game anti-aliasing (video_core/oot_network.h): read by the core
+            // at each dispatch of a game's network.
+            setenv("EDEN_OOT_ANTI_ALIASING", video.skip_game_aa ? "skip" : "game", 1);
             const int resolution = video.resolution;
             const int filter = video.upscaling_filter;
             Settings::values.resolution_setup.SetValue(resolutions[resolution]);
@@ -1264,21 +1267,6 @@ int main(int argc, char** argv) {
             // Mods): Eden's patch manager skips the names in this list. With the Library's Mods
             // switch off for the game, every one of them is in it.
             const u64 title = eden_game_title_id(guest);
-            {
-                // Donkey Kong Bananza's update needs its HMMA compute shaders expanded in software
-                // (patch 0009); other titles keep skipping them, as Mario Kart World's frame rate
-                // was measured. A value from env.txt wins.
-                static bool soft_hmma_by_port = false;
-                if (title == 0x040074A01BF12000ULL) {
-                    if (std::getenv("EDEN_NX2_SOFT_HMMA") == nullptr) {
-                        setenv("EDEN_NX2_SOFT_HMMA", "1", 1);
-                        soft_hmma_by_port = true;
-                    }
-                } else if (soft_hmma_by_port) {
-                    unsetenv("EDEN_NX2_SOFT_HMMA");
-                    soft_hmma_by_port = false;
-                }
-            }
             const auto all_mods = Eden::Mods::List(Eden::AssetsPath("mods"), title);
             auto mods_off = Eden::LoadDisabledMods(title);
             if (!Eden::LoadModsEnabled(title)) {

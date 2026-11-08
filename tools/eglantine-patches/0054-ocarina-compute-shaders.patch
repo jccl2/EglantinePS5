@@ -1,0 +1,442 @@
+diff --git a/src/shader_recompiler/frontend/ampere/lower_to_maxwell.h b/src/shader_recompiler/frontend/ampere/lower_to_maxwell.h
+index 448f337b2b..8ead45d346 100644
+--- a/src/shader_recompiler/frontend/ampere/lower_to_maxwell.h
++++ b/src/shader_recompiler/frontend/ampere/lower_to_maxwell.h
+@@ -61,9 +61,9 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
+     bool uses_uniform_bank = false;
+     for (const auto& instruction : code) {
+         const u32 op = instruction.Bits(0, 12);
+-        uses_uniform_bank |= op == 0xd08;
++        uses_uniform_bank |= op == 0xd08 || op == 0x4a4;
+         uses_uniform_bank |= op == 0x3c4 || op == 0x2bd || op == 0x896 || op == 0xc0b || op == 0xc0c || op == 0x986 || op == 0x9a8 || op == 0xc12 || op == 0xc17 || op == 0xe24 || op == 0xc24 || op == 0xd00 || op == 0xd09 || op == 0x9c3 || op == 0xc45 || op == 0x2a4 || op == 0x891 || op == 0x890 || op == 0x290 || op == 0x28c || op == 0x88c || op == 0x287 || op == 0x887 || op == 0x958 || op == 0xab9 || op == 0xabb || op == 0x899 || op == 0xc20 || op == 0xe21 || op == 0xe23 || op == 0xc02 ||
+-                             op == 0x886 || op == 0x3c2 || op == 0xc82 || op == 0x882 || op == 0x292 || op == 0x092 || op == 0x892 || op == 0x291 || op == 0x981 || op == 0xc13 || op == 0xc10 || op == 0xc11 || op == 0xc23 || op == 0x526 || op == 0x2be || op == 0x8a4 || op == 0xd05 || (op == 0x984 && instruction.Bits(91, 1)) || (op == 0x988 && instruction.Bits(91, 1)) || op == 0x89c || op == 0x883 || op == 0x2a5 || op == 0xd06 || op == 0x299 || op == 0xc09 || op == 0xf60 || (op == 0x81c && instruction.Bits(67, 1));
++                             op == 0x886 || op == 0x3c2 || op == 0xc82 || op == 0x882 || op == 0x292 || op == 0x092 || op == 0x892 || op == 0x291 || op == 0x981 || op == 0xc13 || op == 0xc10 || op == 0xc11 || op == 0xc23 || op == 0x526 || op == 0x2be || op == 0x8a4 || op == 0xd05 || (op == 0x984 && instruction.Bits(91, 1)) || (op == 0x988 && instruction.Bits(91, 1)) || op == 0x89c || op == 0x883 || op == 0x2a5 || op == 0xd06 || op == 0x8a5 || op == 0x299 || op == 0xc09 || op == 0xf60 || (op == 0x81c && instruction.Bits(67, 1));
+     }
+     const auto address_of = [](u32 index) { return 0x50U + index * 8 + ((index + 1) / 3) * 8; };
+     const auto fail = [&](u32 index, std::string_view reason) {
+@@ -134,8 +134,11 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
+         bool uniform_guard = false;
+         bool checked_guard = false;
+         u32 uniform_output = 7; // ULOP3's UPn output: computed in P(6-n), then merged into R239
+-        if (opcode == 0x2a4 || opcode == 0x8a4 || opcode == 0x891 || opcode == 0x890 || opcode == 0x290 ||
+-            opcode == 0x292 || opcode == 0x092 || opcode == 0x892 || opcode == 0x291 || opcode == 0x896) {
++        if (opcode == 0x2a4 || opcode == 0x4a4 || opcode == 0x8a4 || opcode == 0x891 || opcode == 0x890 || opcode == 0x290 ||
++            opcode == 0x292 || opcode == 0x092 || opcode == 0x892 || opcode == 0x291 || opcode == 0x896 ||
++            opcode == 0x8a5) {
++            // UIMAD.WIDE.U32 with an immediate (0x8a5, upstream 7998b0bc55) becomes IMAD.WIDE.U32 (0x825),
++            // uniform IMAD with a constant-buffer operand (0x4a4, upstream #87) IMAD (0x424).
+             // UPRMT (0x896: immediate selector) becomes PRMT on the registers its uniform
+             // registers live in, as the other uniform arithmetic does.
+             // A UPn guard is swapped into P(6-n) around the op; lowerings that would clobber the
+@@ -164,9 +167,9 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code, bool geo
+                 uniform_output = insn.Bits(81, 3);
+                 insn.words[2] = (insn.words[2] & ~(7U << 17)) | ((6 - uniform_output) << 17);
+             }
+-            opcode = opcode == 0x2a4 ? 0x224 : opcode == 0x8a4 ? 0x824 : opcode == 0x891 ? 0x811 : opcode == 0x890 ? 0x810
++            opcode = opcode == 0x2a4 ? 0x224 : opcode == 0x4a4 ? 0x424 : opcode == 0x8a4 ? 0x824 : opcode == 0x891 ? 0x811 : opcode == 0x890 ? 0x810
+                    : opcode == 0x292 || opcode == 0x092 ? 0x212 : opcode == 0x892 ? 0x812 : opcode == 0x291 ? 0x211
+-                   : opcode == 0x896 ? 0x816 : 0x210;
++                   : opcode == 0x896 ? 0x816 : opcode == 0x8a5 ? 0x825 : 0x210;
+         }
+         // 0x899 (USHF) lowers to one SHR/SHL, so a uniform guard is swapped in like these.
+         const bool uniform_predication = opcode == 0xabb || opcode == 0xab9 || opcode == 0xc82 || opcode == 0x882 ||
+@@ -1314,12 +1317,12 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
+                 }
+                 break;
+             }
+-            // Software expansion only where the port asks for it (EDEN_NX2_SOFT_HMMA=1, set for
+-            // Donkey Kong Bananza): other titles keep skipping these shaders as before, which
+-            // Mario Kart World's frame rate was measured with.
++            // Without a cooperative-matrix path, HMMA is expanded in software by default (games
++            // draw whole scenes with these shaders: Ocarina of Time's title screen, Donkey Kong
++            // Bananza). EDEN_NX2_SOFT_HMMA=0 skips these shaders instead, as before.
+             const char* soft_hmma = std::getenv("EDEN_NX2_SOFT_HMMA");
+             if ((mode != "fast" || !support_cooperative_matrix) &&
+-                (soft_hmma == nullptr || soft_hmma[0] != '1'))
++                soft_hmma != nullptr && soft_hmma[0] == '0')
+                 return fail(index, "native matrix multiply cooperative path unavailable");
+             // Native lowering (default; EDEN_NX2_HMMA_NATIVE=0 keeps the Maxwell expansion below):
+             // one HMMA_NATIVE pseudo-instruction whose translator builds the IR directly
+@@ -2789,6 +2792,65 @@ case 0x311: { // F2I.FTZ.U64.TRUNC, per nvdisasm: Maxwell's F2I gives 32 bits, s
+             break;
+         }
+         case 0x210: case 0x810: case 0xa10: case 0xc10: { // IADD3 with zero third source and no carry outputs
++            // UIADD3.X with UPn carry-ins (upstream Eglantine #87).
++            if (rewritten_uniform && opcode == 0x210 && insn.Bits(74, 1) &&
++                insn.Bits(81, 6) == 0x3f) {
++                if (guarded_uniform || (insn.words[2] & ~0x0781e0ffU) != 0x007e0400U ||
++                    (insn.words[1] & ~0xffU))
++                    return fail(index, "native uniform extended add mode");
++                emit(0x5c10000000000000ULL | predicate | 250 | (u64{insn.Bits(24, 8)} << 8) |
++                     (u64{insn.Bits(32, 8)} << 20));
++                emit(0x5c10000000000000ULL | predicate | 250 | (u64{250} << 8) |
++                     (u64{insn.Bits(64, 8)} << 20));
++                u32 mask = 0;
++                for (u32 bit : {77U, 87U}) {
++                    const u32 source = insn.Bits(bit, 3);
++                    if (source != 7) mask |= 1U << (6 - source);
++                }
++                save_predicate(mask);
++                emit(0x38f0000000070000ULL | (u64{239} << 8) | (u64{mask} << 20));
++                mov_imm(252, 1);
++                for (u32 bit : {77U, 87U}) {
++                    const u32 source = insn.Bits(bit, 3);
++                    emit(0x5ca0000000000000ULL | predicate | 251 | (u64{252} << 8) |
++                         (u64{255} << 20) | (u64{source == 7 ? 7U : 6 - source} << 39) |
++                         (u64{insn.Bits(bit + 3, 1)} << 42));
++                    emit(0x5c10000000000000ULL | predicate | 250 | (u64{250} << 8) |
++                         (u64{251} << 20));
++                }
++                restore_predicate(mask);
++                emit(base(0x5c98000000000000ULL) | (u64{15} << 39) | (u64{250} << 20));
++                break;
++            }
++            // UIADD3 with UPn carry outputs (Ocarina's movie/AA compute; upstream Eglantine #87).
++            if (rewritten_uniform && opcode == 0x210 && insn.Bits(81, 6) != 0x3f) {
++                const u32 first = insn.Bits(81, 3), second = insn.Bits(84, 3);
++                if (guarded_uniform || (insn.words[2] & ~0x007e00ffU) != 0x0781e000U ||
++                    (insn.words[1] & ~0xffU) || (first != 7 && first == second))
++                    return fail(index, "native uniform add carry mode");
++                emit(0x5c10000000000000ULL | predicate | 250 | (u64{insn.Bits(24, 8)} << 8) |
++                     (u64{insn.Bits(32, 8)} << 20) | (u64{1} << 47));
++                emit(0x5c10000000000000ULL | predicate | 251 | (u64{255} << 8) |
++                     (u64{255} << 20) | (u64{1} << 43));
++                emit(0x5c10000000000000ULL | predicate | 250 | (u64{250} << 8) |
++                     (u64{insn.Bits(64, 8)} << 20) | (u64{1} << 47));
++                emit(0x5c10000000000000ULL | predicate | 251 | (u64{251} << 8) |
++                     (u64{255} << 20) | (u64{1} << 43));
++                const u32 mask = (first == 7 ? 0U : 1U << (6 - first)) |
++                                 (second == 7 ? 0U : 1U << (6 - second));
++                save_predicate(mask);
++                emit(base(0x5c98000000000000ULL) | (u64{15} << 39) | (u64{250} << 20));
++                for (u32 output = 0; output < 2; ++output) {
++                    const u32 target = output ? second : first;
++                    if (target == 7) continue;
++                    mov_imm(252, output + 1);
++                    emit(0x5b60000000000000ULL | predicate | 7 | (u64{6 - target} << 3) |
++                         (u64{251} << 8) | (u64{252} << 20) | (u64{7} << 39) | (u64{6} << 49));
++                }
++                emit(0x38e8000000070000ULL | 239 | (u64{239} << 8) | (u64{mask} << 20));
++                restore_predicate(mask);
++                break;
++            }
+             // 64-bit adds: IADD3 with a carry-out predicate (bits 81-83), then IADD3.X (bit 74) with
+             // a carry-in predicate (bits 87-89, negate 90). Uniform forms keep UPn in R239 bit 6-n.
+             if ((opcode == 0x210 || opcode == 0x810 || opcode == 0xa10) && insn.Bits(64, 8) == 255 &&
+diff --git a/src/video_core/CMakeLists.txt b/src/video_core/CMakeLists.txt
+index 1123dba0b1..16e870d8ed 100644
+--- a/src/video_core/CMakeLists.txt
++++ b/src/video_core/CMakeLists.txt
+@@ -238,6 +238,7 @@ add_library(video_core STATIC
+     shader_cache.h
+     shader_environment.cpp
+     shader_environment.h
++    oot_network.h
+     shader_notify.cpp
+     shader_notify.h
+     smaa_area_tex.h
+diff --git a/src/video_core/engines/kepler_compute.cpp b/src/video_core/engines/kepler_compute.cpp
+index 0826c75e52..155b0118e2 100644
+--- a/src/video_core/engines/kepler_compute.cpp
++++ b/src/video_core/engines/kepler_compute.cpp
+@@ -24,6 +24,8 @@
+ #include "video_core/engines/kepler_compute.h"
+ #include "video_core/engines/maxwell_3d.h"
+ #include "video_core/memory_manager.h"
++#include "video_core/oot_network.h"
++#include "common/scope_exit.h"
+ #include "video_core/native_query_trace.h"
+ #ifdef ARCHITECTURE_x86_64
+ #include "video_core/macro_turing_jit.h"
+@@ -546,8 +548,14 @@ bool KeplerCompute::DispatchNativeCompute(const NativeQmdScheduler::Descriptor&
+     }
+     if (!launch_description.block_dim_x || !launch_description.block_dim_y || !launch_description.block_dim_z)
+         return false;
++    in_native_dispatch = true;
++    SCOPE_EXIT {
++        in_native_dispatch = false;
++    };
+     try {
+         rasterizer->DispatchCompute();
++    } catch (const VideoCommon::OotNetwork::DispatchReplaced&) {
++        return true;
+     } catch (const Shader::Exception& error) {
+         static std::unordered_set<std::string> logged;
+         if (logged.insert(error.what()).second) {
+@@ -587,6 +595,107 @@ void KeplerCompute::DescribeNativeResources(const NativeQmdScheduler::Descriptor
+     }
+ }
+ 
++std::optional<Texture::TICEntry> KeplerCompute::ConstBuffer0Image(u32 offset) const {
++    const auto& cbuf = launch_description.const_buffer_config[0];
++    const GPUVAddr cbuf_address = (GPUVAddr{cbuf.address_high} << 32) | cbuf.address_low;
++    if (!(launch_description.const_buffer_enable_mask & 1) || cbuf.size.Value() < offset + 4 ||
++        !memory_manager.IsFullyMappedRange(cbuf_address + offset, 4)) {
++        return std::nullopt;
++    }
++    const u32 tic_index = memory_manager.Read<u32>(cbuf_address + offset) & 0xfffff;
++    if (tic_index > regs.tic.limit ||
++        !memory_manager.IsFullyMappedRange(regs.tic.Address() +
++                                               u64{tic_index} * sizeof(Texture::TICEntry),
++                                           sizeof(Texture::TICEntry))) {
++        return std::nullopt;
++    }
++    return GetTICEntry(tic_index);
++}
++
++bool KeplerCompute::BypassOotNetwork(u64 program_id, u64 native_key, bool uses_hmma) {
++    using namespace VideoCommon::OotNetwork;
++    if (!BypassEnabled(program_id)) {
++        return false;
++    }
++    if (std::getenv("EDEN_OOT_NETWORK_TRACE")) {
++        // Each compute program once: its key, tensor use, grid and the images constant buffer 0
++        // names (to re-derive the output pass after a game update).
++        static std::mutex trace_mutex;
++        static std::unordered_set<u64> traced;
++        std::scoped_lock lock{trace_mutex};
++        if (traced.insert(native_key).second) {
++            const auto& cbuf = launch_description.const_buffer_config[0];
++            std::string handles;
++            for (u32 offset = 0; offset + 4 <= std::min<u32>(cbuf.size.Value(), 0x800); offset += 4) {
++                if (const auto tic = ConstBuffer0Image(offset);
++                    tic && tic->Address() != 0 && tic->Width() >= 64 && tic->Height() >= 64) {
++                    handles += fmt::format(" @{:#x}={:#x}/{}x{}/f{:#x}", offset, tic->Address(), tic->Width(),
++                                           tic->Height(), static_cast<u32>(tic->format.Value()));
++                }
++            }
++            std::fprintf(stderr, "OOT_TRACE program %016llx hmma %d grid %ux%ux%u:%s\n",
++                         static_cast<unsigned long long>(native_key), static_cast<int>(uses_hmma),
++                         static_cast<unsigned>(launch_description.grid_dim_x.Value()),
++                         static_cast<unsigned>(launch_description.grid_dim_y.Value()),
++                         static_cast<unsigned>(launch_description.grid_dim_z.Value()), handles.c_str());
++        }
++    }
++    if (native_key != OutputProgramKey) {
++        // A pass of the network (tensor instructions): skipped while the output pass, itself a
++        // tensor program, is being replaced.
++        return uses_hmma && output_replaced.load(std::memory_order_relaxed);
++    }
++    const auto input = ConstBuffer0Image(TonemappedHandleOffset);
++    const auto output = ConstBuffer0Image(OutputHandleOffset);
++    if (!input || !output || input->format != Texture::TextureFormat::A8B8G8R8 ||
++        output->format != input->format || input->Address() == 0 || output->Address() == 0 ||
++        input->Address() == output->Address() || !input->IsBlockLinear() || !output->IsBlockLinear() ||
++        output->Width() < input->Width() || output->Height() < input->Height()) {
++        output_replaced.store(false, std::memory_order_relaxed);
++        static bool warned = false;
++        if (!std::exchange(warned, true)) {
++            LOG_WARNING(HW_GPU, "Ocarina of Time: unexpected anti-aliasing images; the game's network runs");
++        }
++        return false;
++    }
++    const auto surface = [](const Texture::TICEntry& tic) {
++        Fermi2D::Surface result{};
++        result.format = Tegra::RenderTargetFormat::A8B8G8R8_UNORM;
++        result.linear = Fermi2D::MemoryLayout::BlockLinear;
++        result.block_width.Assign(tic.block_width);
++        result.block_height.Assign(tic.block_height);
++        result.block_depth.Assign(tic.block_depth);
++        result.depth = 1;
++        result.width = tic.Width();
++        result.height = tic.Height();
++        result.addr_upper = static_cast<u32>(tic.Address() >> 32);
++        result.addr_lower = static_cast<u32>(tic.Address());
++        return result;
++    };
++    const Fermi2D::Config config{
++        .operation = Fermi2D::Operation::SrcCopy,
++        .filter = Fermi2D::Filter::Bilinear,
++        .must_accelerate = true,
++        .dst_x0 = 0,
++        .dst_y0 = 0,
++        .dst_x1 = static_cast<s32>(output->Width()),
++        .dst_y1 = static_cast<s32>(output->Height()),
++        .src_x0 = 0,
++        .src_y0 = 0,
++        .src_x1 = static_cast<s32>(input->Width()),
++        .src_y1 = static_cast<s32>(input->Height()),
++    };
++    const bool copied = rasterizer->AccelerateSurfaceCopy(surface(*input), surface(*output), config);
++    output_replaced.store(copied, std::memory_order_relaxed);
++    static bool logged = false;
++    if (!std::exchange(logged, true)) {
++        LOG_INFO(HW_GPU, "Ocarina of Time: anti-aliasing network bypassed ({}): {:#x} {}x{} -> {:#x} {}x{}",
++                 copied ? "upscale of the tonemapped image" : "upscale failed", input->Address(),
++                 input->Width(), input->Height(), output->Address(), output->Width(), output->Height());
++    }
++    return copied;
++}
++
+ std::atomic<u32> g_nx2_trace_draws_after_upscale{};
+ 
+ // Title 4's upscaler reads the tonemapped frame through the texture handle at cbuf0+0x90 and
+diff --git a/src/video_core/engines/kepler_compute.h b/src/video_core/engines/kepler_compute.h
+index 9bd590ff19..dded5b3375 100644
+--- a/src/video_core/engines/kepler_compute.h
++++ b/src/video_core/engines/kepler_compute.h
+@@ -57,6 +57,12 @@ extern std::atomic<u32> g_nx2_trace_draws_after_upscale;
+ 
+ class KeplerCompute final : public EngineInterface {
+ public:
++    /// Ocarina of Time with its anti-aliasing bypass on (oot_network.h): true when this dispatch
++    /// of the game's network is skipped, or its output pass replaced by a copy of the tonemapped
++    /// image. Only during a native dispatch.
++    bool BypassOotNetwork(u64 program_id, u64 native_key, bool uses_hmma = false);
++    bool InNativeDispatch() const { return in_native_dispatch; }
++
+     explicit KeplerCompute(MemoryManager& memory_manager);
+     ~KeplerCompute();
+ 
+@@ -267,6 +273,8 @@ private:
+     bool DispatchNativeCompute(const NativeQmdScheduler::Descriptor& descriptor);
+     void ProcessNativeReportSemaphore(u32 argument);
+     void DescribeNativeResources(const NativeQmdScheduler::Descriptor& qmd);
++    /// Texture descriptor that the handle at `offset` in constant buffer 0 selects.
++    std::optional<Texture::TICEntry> ConstBuffer0Image(u32 offset) const;
+     bool UpscaleInsteadOfNativeProgram();
+     bool ProcessNativeMethod(Core::System& system, u32 method, u32 argument, bool is_last_call);
+     NativeQmdScheduler native_qmd;
+@@ -311,6 +319,7 @@ private:
+     };
+     std::vector<UploadInfo> uploads;
+     std::optional<GPUVAddr> indirect_compute{};
++    bool in_native_dispatch = false;
+ };
+ 
+ #define ASSERT_REG_POSITION(field_name, position)                                                  \
+diff --git a/src/video_core/oot_network.h b/src/video_core/oot_network.h
+new file mode 100644
+index 0000000000..15d6666dda
+--- /dev/null
++++ b/src/video_core/oot_network.h
+@@ -0,0 +1,51 @@
++// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <atomic>
++#include <cstdlib>
++#include <cstring>
++
++#include "common/common_types.h"
++
++// The Legend of Zelda: Ocarina of Time's anti-aliasing (after upstream Eglantine f96cded333 by
++// ProphetWild, re-derived for this core). After tonemapping (an A8B8G8R8 image at the internal
++// resolution), the game runs a tensor (HMMA) network in nine compute passes and an output pass that
++// upscales the network's result to the output resolution and sharpens it hard. With the bypass on,
++// the network's passes are skipped and the output pass is replaced by a bilinear upscale of the
++// tonemapped image: no sharpening halos, and on the PS5 none of the software HMMA cost.
++//
++// On by default; EDEN_OOT_ANTI_ALIASING=game (Settings > Video > "Ocarina of Time anti-aliasing"
++// at Game) runs the game's own network.
++//
++// The output pass's program key and handle offsets are those of the game's update 131072 (2.0.0);
++// another update needs them re-checked (EDEN_OOT_NETWORK_TRACE=1 logs the passes to stderr).
++namespace VideoCommon::OotNetwork {
++
++constexpr u64 ProgramId = 0x0400486024DEC000ULL;
++
++/// Native program key (Shader::Ampere::NativeProgramKey) of the output pass.
++constexpr u64 OutputProgramKey = 0x6093c9143ba0904dULL;
++/// Constant buffer 0 offsets of the output pass's handles: the tonemapped image it reads and the
++/// output image it writes.
++constexpr u32 TonemappedHandleOffset = 0xa8;
++constexpr u32 OutputHandleOffset = 0xc8;
++
++/// The latest output pass was replaced; the network's passes are skipped only while it is, so a
++/// failed replacement brings the game's network back on the next frame.
++inline std::atomic<bool> output_replaced{};
++
++/// Thrown out of the compute shader lookup when a dispatch of the network is skipped or replaced.
++struct DispatchReplaced {};
++
++inline bool BypassEnabled(u64 program_id) {
++    if (program_id != ProgramId) {
++        return false;
++    }
++    // Read each time: the launcher sets it from Settings before each game it starts.
++    const char* value = std::getenv("EDEN_OOT_ANTI_ALIASING");
++    return value == nullptr || std::strcmp(value, "game") != 0;
++}
++
++} // namespace VideoCommon::OotNetwork
+diff --git a/src/video_core/shader_cache.cpp b/src/video_core/shader_cache.cpp
+index c2c3cb0a0d..f8636f0132 100644
+--- a/src/video_core/shader_cache.cpp
++++ b/src/video_core/shader_cache.cpp
+@@ -25,6 +25,8 @@
+ #include "video_core/host1x/gpu_device_memory_manager.h"
+ #include "video_core/memory_manager.h"
+ #include "video_core/shader_cache.h"
++#include "video_core/oot_network.h"
++#include "common/settings.h"
+ #include "video_core/shader_environment.h"
+ #include "video_core/texture_cache/util.h"
+ 
+@@ -181,18 +183,33 @@ const ShaderInfo* ShaderCache::ComputeShader() {
+         LOG_ERROR(HW_GPU, "Invalid GPU address for shader {:#016x}", shader_addr);
+         return nullptr;
+     }
+-    if (const ShaderInfo* const shader = TryGet(*cpu_shader_addr)) {
++    const auto bypass = [&](const ShaderInfo* shader) {
++        // Ocarina of Time's anti-aliasing network (oot_network.h): skipped, or its output pass
++        // replaced by a copy of the tonemapped image.
++        if (shader && shader->lowered_native && kepler_compute->InNativeDispatch()) {
++            const u64 program_id = Settings::GetCurrentProgramID();
++            if (VideoCommon::OotNetwork::BypassEnabled(program_id) &&
++                kepler_compute->BypassOotNetwork(program_id, shader->lowered_native->native_program_key,
++                                                 shader->lowered_native->uses_hmma)) {
++                throw VideoCommon::OotNetwork::DispatchReplaced{};
++            }
++        }
+         return shader;
++    };
++    if (const ShaderInfo* const shader = TryGet(*cpu_shader_addr)) {
++        return bypass(shader);
+     }
++    const ShaderInfo* made{};
+     try {
+         RethrowIfRejected(*cpu_shader_addr);
+         ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start,
+                                {}, support_cooperative_matrix};
+-        return MakeShaderInfo(env, *cpu_shader_addr);
++        made = MakeShaderInfo(env, *cpu_shader_addr);
+     } catch (const Shader::Exception&) {
+         RememberRejection(*cpu_shader_addr);
+         throw;
+     }
++    return bypass(made);
+ }
+ 
+ void ShaderCache::RethrowIfRejected(VAddr addr) {
+diff --git a/src/video_core/shader_environment.cpp b/src/video_core/shader_environment.cpp
+index a4820b1a02..bd6840a7c9 100644
+--- a/src/video_core/shader_environment.cpp
++++ b/src/video_core/shader_environment.cpp
+@@ -558,6 +558,9 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
+             words[1], words[2], words[3]);
+     }
+     auto result = std::make_shared<LoweredNativeCode>();
++    result->native_program_key = Shader::Ampere::NativeProgramKey(native);
++    result->uses_hmma = std::any_of(native.begin(), native.end(),
++                                    [](const auto& instruction) { return (instruction.words[0] & 0xfff) == 0x23c; });
+     result->texture_bound = lowered.required_texture_buffer;
+     result->surface_bound = lowered.required_surface_buffer;
+     result->source_size = native_header_size + lowered.source_size;
+diff --git a/src/video_core/shader_environment.h b/src/video_core/shader_environment.h
+index 2fd3b1b87b..5ef3ffa38a 100644
+--- a/src/video_core/shader_environment.h
++++ b/src/video_core/shader_environment.h
+@@ -43,6 +43,10 @@ struct LoweredNativeCode {
+     u32 texture_bound = ~0U;
+     /// Constant buffer for surface descriptors, when the program needs another than texture_bound.
+     u32 surface_bound = ~0U;
++    /// FNV-1a of the native instructions (Shader::Ampere::NativeProgramKey): names a game's program.
++    u64 native_program_key{};
++    /// The program has tensor (HMMA) instructions.
++    bool uses_hmma{};
+ };
+ 
+ class GenericEnvironment : public Shader::Environment {

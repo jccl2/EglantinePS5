@@ -754,6 +754,10 @@ msgstr "補幀目標幀率"
 msgid "Frame gen type"
 msgstr "補幀方式"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "略過遊戲反鋸齒"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "幀生成"

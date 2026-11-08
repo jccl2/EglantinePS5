@@ -754,6 +754,10 @@ msgstr "Cible de génération d'images"
 msgid "Frame gen type"
 msgstr "Type de génération d'images"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Ignorer l'anticrénelage du jeu"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Génération d'images"

@@ -1965,6 +1965,10 @@ msgid "SKIP CPU INVALIDATION"
 msgstr ""
 
 #: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr ""
+
+#: pe/ui/settings.cpp
 msgid "Skips some checks when a game changes memory the GPU uses: faster, and textures can be stale."
 msgstr ""
 

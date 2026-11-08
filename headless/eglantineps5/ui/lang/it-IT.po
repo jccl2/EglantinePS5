@@ -754,6 +754,10 @@ msgstr "Obiettivo generazione fotogrammi"
 msgid "Frame gen type"
 msgstr "Tipo di generazione fotogrammi"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Salta l'antialiasing del gioco"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Generazione di fotogrammi"

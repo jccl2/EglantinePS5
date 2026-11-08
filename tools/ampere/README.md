@@ -8,7 +8,7 @@ Build them in the `prospero-win` container from the repository root (the lowerin
     clang++-18 -std=c++20 -O1 -o hmma_sim tools/ampere/hmma_sim.cpp
 
 - `lowering_stats DIR...` — runs the lowering over dumped native programs and lists, per Ampere opcode,
-  how many instructions it becomes (set `EDEN_NX2_SOFT_HMMA=1` to include HMMA programs).
+  how many instructions it becomes (HMMA programs are included; `EDEN_NX2_SOFT_HMMA=0` leaves them out).
 - `expand_examples DIR OPCODE...` — the Maxwell instruction patterns (top 16 bits) an opcode becomes.
 - `hmma_sim` — checks the native HMMA lane mapping (PTX m16n8k16 / m16n8k8 f16 fragments) against a
   reference product with the same f32 accumulation and f16 rounding.

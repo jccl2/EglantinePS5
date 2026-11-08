@@ -754,6 +754,10 @@ msgstr "Mål for bildegenerering"
 msgid "Frame gen type"
 msgstr "Type bildegenerering"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Hopp over spillets kantutjevning"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Bildegenerering"

@@ -754,6 +754,10 @@ msgstr "เป้าหมายการสร้างเฟรม"
 msgid "Frame gen type"
 msgstr "ประเภทการสร้างเฟรม"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "ข้ามการลดรอยหยักของเกม"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "การสร้างเฟรม"

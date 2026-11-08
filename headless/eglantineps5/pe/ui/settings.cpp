@@ -68,6 +68,7 @@ enum VideoRow : int
     video_overlay_gpu,
     video_overlay_memory,
     video_overlay_ping,
+    video_skip_aa,
     // Frame generation: not shown in a build without it (Services::frame_gen_state).
     video_frame_gen,
     video_frame_gen_type,
@@ -593,6 +594,8 @@ void Launcher::press_dialog(Key key)
             prefs_.hud_corner = (std::clamp(prefs_.hud_corner, 0, kHudCorners - 1) + step + kHudCorners) % kHudCorners;
         else if (const int bit = hud_field_bit(option_))
             prefs_.hud_fields ^= bit;
+        else if (option_ == video_skip_aa)
+            prefs_.skip_game_aa = !prefs_.skip_game_aa;
         else if (option_ == video_frame_gen_type)
             prefs_.frame_gen_type =
                 (std::clamp(prefs_.frame_gen_type, 0, kFrameGenTypes - 1) + step + kFrameGenTypes) % kFrameGenTypes;
@@ -810,6 +813,7 @@ void Launcher::draw_dialog(Canvas &c, Modal modal, float open)
             tr(kHudSizeNames[std::clamp(prefs_.hud_size, 0, kHudSizes - 1)]),
             tr(kHudCornerNames[std::clamp(prefs_.hud_corner, 0, kHudCorners - 1)]),
             {}, {}, {}, {}, {}, {}, {}, {}, // the overlay's fields: switches
+            std::string{}, // Skip game anti-aliasing: a switch
             on_off(prefs_.frame_gen),
             kFrameGenTypeNames[std::clamp(prefs_.frame_gen_type, 0, kFrameGenTypes - 1)],
             prefs_.frame_gen_target <= 0 ? std::string{tr("Auto")} :
@@ -824,6 +828,7 @@ void Launcher::draw_dialog(Canvas &c, Modal modal, float open)
             TR("Overlay: FPS"),     TR("Overlay: worst frame"), TR("Overlay: speed"),
             TR("Overlay: CPU"),     TR("Overlay: GPU"),      TR("Overlay: free memory"),
             TR("Overlay: ping"),
+            TR("Skip game anti-aliasing"),
             TR("Frame generation"), TR("Frame gen type"),    TR("Frame gen target"),
             TR("Frame gen multiplier")};
         for (int row = first; row <= last; ++row)
@@ -833,6 +838,11 @@ void Launcher::draw_dialog(Canvas &c, Modal modal, float open)
             {
                 label(row, tr(kNames[row]), kToggle);
                 toggle(c, 1292.0f, row_centre(row), knob);
+            }
+            else if (row == video_skip_aa)
+            {
+                label(row, tr(kNames[row]), kToggle);
+                toggle(c, 1292.0f, row_centre(row), prefs_.skip_game_aa ? 1.0f : 0.0f);
             }
             else if (const int bit = hud_field_bit(row))
             {

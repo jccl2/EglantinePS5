@@ -754,6 +754,10 @@ msgstr "Ziel der Bildgenerierung"
 msgid "Frame gen type"
 msgstr "Art der Bildgenerierung"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Kantenglättung des Spiels überspringen"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Frame-Generierung"

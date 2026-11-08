@@ -754,6 +754,10 @@ msgstr "Képkockagenerálás célértéke"
 msgid "Frame gen type"
 msgstr "Képkockagenerálás típusa"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "A játék élsimításának kihagyása"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Képkockagenerálás"

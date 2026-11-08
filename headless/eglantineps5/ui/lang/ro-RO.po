@@ -754,6 +754,10 @@ msgstr "Țintă generare cadre"
 msgid "Frame gen type"
 msgstr "Tip de generare a cadrelor"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Omite anti-aliasingul jocului"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Generare de cadre"

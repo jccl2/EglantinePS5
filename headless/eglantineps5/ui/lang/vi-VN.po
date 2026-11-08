@@ -754,6 +754,10 @@ msgstr "Mục tiêu tạo khung hình"
 msgid "Frame gen type"
 msgstr "Loại tạo khung hình"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Bỏ qua khử răng cưa của trò chơi"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Tạo khung hình"

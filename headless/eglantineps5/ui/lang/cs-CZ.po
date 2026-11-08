@@ -754,6 +754,10 @@ msgstr "Cíl generování snímků"
 msgid "Frame gen type"
 msgstr "Typ generování snímků"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Přeskočit vyhlazování hry"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Generování snímků"

@@ -754,6 +754,10 @@ msgstr "补帧目标帧率"
 msgid "Frame gen type"
 msgstr "补帧方式"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "跳过游戏抗锯齿"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "帧生成"

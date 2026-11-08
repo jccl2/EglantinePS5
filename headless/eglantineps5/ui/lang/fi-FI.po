@@ -754,6 +754,10 @@ msgstr "Kuvien luonnin tavoite"
 msgid "Frame gen type"
 msgstr "Kuvien luonnin tyyppi"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Ohita pelin reunanpehmennys"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Kehysten luonti"

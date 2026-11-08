@@ -754,6 +754,10 @@ msgstr "Цель генерации кадров"
 msgid "Frame gen type"
 msgstr "Тип генерации кадров"
 
+#: pe/ui/settings.cpp
+msgid "Skip game anti-aliasing"
+msgstr "Пропускать сглаживание игры"
+
 #: pe/ui/game_options.cpp, pe/ui/settings.cpp
 msgid "Frame generation"
 msgstr "Генерация кадров"
