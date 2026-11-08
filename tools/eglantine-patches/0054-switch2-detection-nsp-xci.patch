@@ -1,0 +1,93 @@
+diff --git a/src/core/core.cpp b/src/core/core.cpp
+index 225a0c2..e3c82f7 100644
+--- a/src/core/core.cpp
++++ b/src/core/core.cpp
+@@ -25,12 +25,16 @@
+ #include "core/debugger/debugger.h"
+ #include "core/device_memory.h"
+ #include "core/file_sys/nup.h"
++#include "core/file_sys/card_image.h"
++#include "core/file_sys/content_archive.h"
+ #include "core/file_sys/fs_filesystem.h"
++#include "core/file_sys/nca_metadata.h"
+ #include "core/file_sys/patch_manager.h"
+ #include "core/file_sys/program_metadata.h"
+ #include "core/file_sys/registered_cache.h"
+ #include "core/file_sys/romfs_factory.h"
+ #include "core/file_sys/savedata_factory.h"
++#include "core/file_sys/submission_package.h"
+ #include "core/file_sys/vfs/vfs_concat.h"
+ #include "core/file_sys/vfs/vfs_real.h"
+ #include "core/gpu_dirty_memory_manager.h"
+@@ -115,18 +119,55 @@ FileSys::VirtualFile GetGameFileFromPath(const FileSys::VirtualFilesystem& vfs,
+ 
+ namespace {
+ 
+-// Switch 2 titles boot as a loose ExeFS, with main.npdm next to main.
+-bool IsSwitch2Program(FileSys::VirtualFile file) {
++bool IsSwitch2Npdm(const FileSys::VirtualFile& npdm) {
++    FileSys::ProgramMetadata metadata;
++    return npdm != nullptr && metadata.Load(npdm) == Loader::ResultStatus::Success &&
++           metadata.IsSwitch2();
++}
++
++// The ExeFS of the program an NSP (or an XCI's secure partition) boots: the program NCA's, or
++// the NSP's own for an extracted one.
++FileSys::VirtualDir ProgramExeFS(const FileSys::NSP& nsp) {
++    if (nsp.GetStatus() != Loader::ResultStatus::Success) {
++        return nullptr;
++    }
++    const auto nca = nsp.GetNCA(nsp.GetProgramTitleID(), FileSys::ContentRecordType::Program);
++    return nca != nullptr ? nca->GetExeFS() : nsp.GetExeFS();
++}
++
++// Switch 2 titles boot as a loose ExeFS (main.npdm next to main), a NUP, or an NSP/XCI whose
++// program ExeFS holds a Switch 2 main.npdm. Missing the NSP/XCI case left those titles on the
++// 4 GiB layout and the 19.2 MHz counter: Mario Kart World's nninitStartup then sized its heap
++// from too little total memory, an allocation came back null and MainThread jumped to 0.
++bool IsSwitch2Program(FileSys::VirtualFile file, u64 program_id, std::size_t program_index) {
++    if (file == nullptr) {
++        return false;
++    }
+     // A NUP container: the main its loader starts from (core/file_sys/nup.h).
+     if (FileSys::Nup::Archive::HasMagic(file)) {
+         const auto archive = FileSys::Nup::Archive::Open(file);
+         file = archive != nullptr ? archive->MainFile(archive->Tree(file->GetName())) : nullptr;
++    } else {
++        switch (Loader::IdentifyFile(file)) {
++        case Loader::FileType::NSP:
++        case Loader::FileType::NSZ: {
++            const FileSys::NSP nsp(file, program_id, program_index);
++            const auto exefs = ProgramExeFS(nsp);
++            return exefs != nullptr && IsSwitch2Npdm(exefs->GetFile("main.npdm"));
++        }
++        case Loader::FileType::XCI:
++        case Loader::FileType::XCZ: {
++            const FileSys::XCI xci(file, program_id, program_index);
++            const auto nsp = xci.GetSecurePartitionNSP();
++            const auto exefs = nsp != nullptr ? ProgramExeFS(*nsp) : nullptr;
++            return exefs != nullptr && IsSwitch2Npdm(exefs->GetFile("main.npdm"));
++        }
++        default:
++            break;
++        }
+     }
+     const auto dir = file != nullptr ? file->GetContainingDirectory() : nullptr;
+-    const auto npdm = dir != nullptr ? dir->GetFile("main.npdm") : nullptr;
+-    FileSys::ProgramMetadata metadata;
+-    return npdm != nullptr && metadata.Load(npdm) == Loader::ResultStatus::Success &&
+-           metadata.IsSwitch2();
++    return dir != nullptr && IsSwitch2Npdm(dir->GetFile("main.npdm"));
+ }
+ 
+ } // namespace
+@@ -323,7 +364,8 @@ struct System::Impl {
+ 
+         const bool switch2_program =
+             virtual_filesystem != nullptr &&
+-            IsSwitch2Program(GetGameFileFromPath(virtual_filesystem, filepath));
++            IsSwitch2Program(GetGameFileFromPath(virtual_filesystem, filepath), params.program_id,
++                             params.program_index);
+         Settings::SetCurrentProgramIsSwitch2(switch2_program);
+         Settings::SetAstcRecompressionOverride(std::nullopt);
+ 
