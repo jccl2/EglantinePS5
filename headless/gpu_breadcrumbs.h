@@ -28,7 +28,9 @@
 
 namespace Eden::GpuBreadcrumbs {
 
-inline constexpr std::uint32_t kRing = 1u << 14; // sites kept, by id
+// Sites kept, by id. Large: the CPU keeps recording for a while after the GPU stops (until it
+// waits for a fence), and the stuck command must still be here then. About 13 MiB.
+inline constexpr std::uint32_t kRing = 1u << 20;
 inline constexpr std::size_t kBufferBytes = 256;
 // Offsets in the marker buffer (one 64-byte line each, so the CPU flushes them separately).
 inline constexpr VkDeviceSize kMainReached = 0;
@@ -53,6 +55,7 @@ inline std::atomic<std::uint32_t> next_id{1};
 inline std::atomic<std::uint32_t> upload_id{0}; // last id that also marked the upload buffer
 inline const char* sites[kRing]{};
 inline std::uint8_t kinds[kRing]{}; // 1: main only, 2: main and upload
+inline std::uint32_t ids[kRing]{};  // which id a slot holds (a later one overwrote it if not)
 
 // After the logical device exists (Scheduler constructor). Leaks its buffer on purpose: it must
 // outlive everything, including a device-lost teardown.
@@ -127,6 +130,7 @@ inline void Init(const Vulkan::Device& device) {
 inline void Mark(VkCommandBuffer cmdbuf, VkCommandBuffer upload, const char* site) {
     const std::uint32_t id = next_id.fetch_add(1, std::memory_order_relaxed);
     sites[id % kRing] = site;
+    ids[id % kRing] = id;
     kinds[id % kRing] = upload != VK_NULL_HANDLE ? 2 : 1;
     write_marker(cmdbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, buffer, kMainReached, id);
     write_marker(cmdbuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, buffer, kMainFinished, id);
@@ -162,8 +166,15 @@ inline std::uint32_t Read(VkDeviceSize offset) {
 
 inline void PrintRange(const char* label, std::uint32_t from, std::uint32_t to) {
     for (std::uint32_t id = from; id != to + 1; ++id) {
-        std::fprintf(stderr, "EDEN_GPU_BREADCRUMB %s id=%u %s%s\n", label, id,
-                     kinds[id % kRing] == 2 ? "[+upload] " : "", ShortSite(sites[id % kRing]));
+        if (ids[id % kRing] != id) {
+            std::fprintf(stderr, "EDEN_GPU_BREADCRUMB %s id=%u (overwritten)\n", label, id);
+            continue;
+        }
+        const char* const site = ShortSite(sites[id % kRing]);
+        const char* const close = std::strchr(site, ')');
+        const int length = close != nullptr ? static_cast<int>(close - site) : static_cast<int>(std::strlen(site));
+        std::fprintf(stderr, "EDEN_GPU_BREADCRUMB %s id=%u %s%.*s\n", label, id,
+                     kinds[id % kRing] == 2 ? "[+upload] " : "", length, site);
     }
 }
 
