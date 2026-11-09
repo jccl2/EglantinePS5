@@ -922,6 +922,15 @@ adapt('src/video_core/vulkan_common/vulkan_device.cpp', 'vulkan_device.cpp', [
      '                static_cast<unsigned long long>(device_initial_usage),\n'
      '                static_cast<unsigned long long>(device_access_memory),\n'
      '                static_cast<unsigned long long>(graphics_capacity));\n}\n'),
+    # GPU breadcrumbs (gpu_breadcrumbs.h, EDEN_GPU_BREADCRUMBS=1): VK_AMD_buffer_marker.
+    ('#include "dev_vulkan.h"', '#include "dev_vulkan.h"\n#include "gpu_breadcrumbs.h"'),
+    ('        extensions.robustness_2 = false;\n    }\n',
+     '        extensions.robustness_2 = false;\n    }\n'
+     '    if (::Eden::GpuBreadcrumbs::Requested() &&\n'
+     '        supported_extensions.contains(VK_AMD_BUFFER_MARKER_EXTENSION_NAME)) {\n'
+     '        loaded_extensions.insert(VK_AMD_BUFFER_MARKER_EXTENSION_NAME);\n'
+     '        ::Eden::GpuBreadcrumbs::extension_loaded = true;\n'
+     '    }\n'),
 ])
 # Development GPU fault probe (dev_vulkan.h, submit_sync=on): wait for every
 # submission, so the CPU never records against work the GPU has not finished.
@@ -932,6 +941,48 @@ adapt('src/video_core/renderer_vulkan/vk_scheduler.h',
       'include/video_core/renderer_vulkan/vk_scheduler.h', [
     ('    std::condition_variable_any event_cv;',
      '    std::condition_variable_any event_cv;\n    std::condition_variable drain_cv;\n    unsigned drain_waiters{};'),
+    # GPU breadcrumbs (gpu_breadcrumbs.h, EDEN_GPU_BREADCRUMBS=1): every recorded command is
+    # marked with its recording site, the lambda's file:line in __PRETTY_FUNCTION__.
+    ('#include "video_core/renderer_vulkan/vk_master_semaphore.h"',
+     '#include "video_core/renderer_vulkan/vk_master_semaphore.h"\n#include "gpu_breadcrumbs.h"'),
+    ('    void RecordWithUploadBuffer(T&& command) {\n'
+     '        if (VideoCommon::GpuSplit::check_owner) [[unlikely]] {\n'
+     '            VideoCommon::GpuSplit::CheckOwner("Scheduler::Record");\n'
+     '        }\n'
+     '        if (chunk->Record(command)) {',
+     '    void RecordWithUploadBuffer(T&& command) {\n'
+     '        RecordAt(__PRETTY_FUNCTION__, true, std::move(command));\n'
+     '    }\n\n'
+     '    template <typename T>\n'
+     '    void RecordAt(const char* site, bool upload, T&& command) {\n'
+     '        if (::Eden::GpuBreadcrumbs::enabled) [[unlikely]] {\n'
+     '            RecordChunk([site, upload, inner = std::move(command)](vk::CommandBuffer cmdbuf,\n'
+     '                                                                   vk::CommandBuffer upload_cmdbuf) {\n'
+     '                ::Eden::GpuBreadcrumbs::Mark(*cmdbuf, upload ? *upload_cmdbuf : VkCommandBuffer{}, site);\n'
+     '                inner(cmdbuf, upload_cmdbuf);\n'
+     '            });\n'
+     '            return;\n'
+     '        }\n'
+     '        RecordChunk(std::move(command));\n'
+     '    }\n\n'
+     '    template <typename T>\n'
+     '    void RecordChunk(T&& command) {\n'
+     '        if (VideoCommon::GpuSplit::check_owner) [[unlikely]] {\n'
+     '            VideoCommon::GpuSplit::CheckOwner("Scheduler::Record");\n'
+     '        }\n'
+     '        if (chunk->Record(command)) {'),
+    ('    void Record(T&& c) {\n'
+     '        this->RecordWithUploadBuffer(\n'
+     '            [command = std::move(c)](vk::CommandBuffer cmdbuf, vk::CommandBuffer) {\n'
+     '                command(cmdbuf);\n'
+     '            });\n'
+     '    }',
+     '    void Record(T&& c) {\n'
+     '        this->RecordAt(__PRETTY_FUNCTION__, false,\n'
+     '            [command = std::move(c)](vk::CommandBuffer cmdbuf, vk::CommandBuffer) {\n'
+     '                command(cmdbuf);\n'
+     '            });\n'
+     '    }'),
 ])
 adapt('src/video_core/renderer_vulkan/vk_scheduler.cpp', 'vulkan_scheduler.cpp', [
     ('Scheduler::~Scheduler() = default;',
@@ -968,6 +1019,14 @@ adapt('src/video_core/renderer_vulkan/vk_scheduler.cpp', 'vulkan_scheduler.cpp',
      '    const u64 signal_value = SubmitExecution(signal_semaphore, wait_semaphore);\n'
      '    if (::Eden::DevVulkan::sync_submissions) {\n        Wait(signal_value);\n    }\n'
      '    AllocateNewContext();\n    return signal_value;'),
+    # GPU breadcrumbs: the marker buffer before the worker records anything, and the dump the
+    # terminate handler calls on a lost device (headless/main.cpp, weak reference).
+    ('    AcquireNewChunk();\n    AllocateWorkerCommandBuffer();\n    worker_thread',
+     '    ::Eden::GpuBreadcrumbs::Init(device);\n'
+     '    AcquireNewChunk();\n    AllocateWorkerCommandBuffer();\n    worker_thread'),
+    ('Scheduler::Scheduler(const Device& device_, StateTracker& state_tracker_)',
+     'extern "C" void eden_gpu_breadcrumbs_dump() {\n    ::Eden::GpuBreadcrumbs::Dump();\n}\n\n'
+     'Scheduler::Scheduler(const Device& device_, StateTracker& state_tracker_)'),
 ])
 adapt('src/video_core/renderer_vulkan/pipeline_helper.h',
       'include/video_core/renderer_vulkan/pipeline_helper.h', [

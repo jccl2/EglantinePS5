@@ -82,6 +82,8 @@ extern "C" std::size_t eden_fastmem64_save_sites(const char*, unsigned long long
 #include "eglantineps5/frontend.h"
 #include "eglantineps5/version.h"
 extern "C" void ps5_opengl_heap_snapshot(const char*, unsigned);
+// GPU breadcrumbs (gpu_breadcrumbs.h): defined with the Vulkan scheduler; absent without it.
+extern "C" void eden_gpu_breadcrumbs_dump() __attribute__((weak));
 extern "C" std::int64_t sceKernelGetDirectMemorySize();
 #else
 #include <malloc.h>
@@ -366,6 +368,9 @@ int main(int argc, char** argv) {
                     detail = "non-standard exception";
                 }
             }
+            // A lost device: which scheduler command the GPU stopped in (EDEN_GPU_BREADCRUMBS=1).
+            if (eden_gpu_breadcrumbs_dump != nullptr && std::strstr(detail, "DEVICE_LOST") != nullptr)
+                eden_gpu_breadcrumbs_dump();
             Eden::Report("terminate", detail);
             Eden::Crash::Fail(detail);
         });
@@ -540,6 +545,26 @@ int main(int argc, char** argv) {
                 if (entry.empty() || entry[0] == '#' || split == std::string::npos || split == 0) continue;
                 setenv(entry.substr(0, split).c_str(), entry.c_str() + split + 1, 1);
                 std::printf("EDEN_ENV %s\n", entry.c_str());
+            }
+        }
+        // Development: some of dev-settings.txt's Vulkan switches (dev_vulkan.h) in any build, from
+        // env.txt: EDEN_DEV_VULKAN=robustness2=on,submit_sync=on (comma separated).
+        if (const char* switches = std::getenv("EDEN_DEV_VULKAN")) {
+            std::string list{switches};
+            for (std::size_t start = 0; start <= list.size();) {
+                const std::size_t end = std::min(list.find(',', start), list.size());
+                const std::string entry = list.substr(start, end - start);
+                bool known = true;
+                if (entry == "robustness2=on") Eden::DevVulkan::robustness2 = true;
+                else if (entry == "submit_sync=on") Eden::DevVulkan::sync_submissions = true;
+                else if (entry == "compute_barriers=off") Eden::DevVulkan::compute_barriers = false;
+                else if (entry == "sparse=off") Eden::DevVulkan::disable_sparse = true;
+                else if (entry == "descriptor_buffer=off") Eden::DevVulkan::disable_descriptor_buffer = true;
+                else if (entry == "conditional_rendering=off") Eden::DevVulkan::disable_conditional_rendering = true;
+                else if (entry == "hcr=cpu") Eden::DevVulkan::hcr_mode = 2;
+                else known = false;
+                if (!entry.empty()) std::printf("EDEN_DEV_VULKAN %s%s\n", entry.c_str(), known ? "" : " (unknown)");
+                start = end + 1;
             }
         }
         // The console's defaults for the core's switches (env.txt above wins). Without a fastmem
