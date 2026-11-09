@@ -345,6 +345,34 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {'''),
     ('    VideoCommon::LoadingProbe::gpu.Mark("draw prepare");\n    mesh_draw = pipeline->IsMeshPipeline();',
      '    VideoCommon::LoadingProbe::gpu.Mark("draw prepare");\n    ::Eden::AstcPolicy::Draw();\n'
      '    mesh_draw = pipeline->IsMeshPipeline();'),
+    # Task/mesh draw diagnostics (mesh_diag.h, EDEN_MESH_DIAG): the draw's guest programs, once
+    # per shape in stderr.log and in the GPU breadcrumbs; mode 2 isolates each draw on the GPU.
+    ('#include "dev_vulkan.h"', '#include "dev_vulkan.h"\n#include "gpu_breadcrumbs.h"\n#include "mesh_diag.h"'),
+    ('        if (mesh_draw) {\n            static u32 diagnostic_mesh_draws{};',
+     '        if (mesh_draw && ::Eden::MeshDiag::Mode() != 0) {\n'
+     '            const auto& mesh_regs = maxwell3d->regs;\n'
+     '            const auto program = [&](size_t slot) {\n'
+     '                return (u64{mesh_regs.pipelines[slot].reserved[0] & 0xff} << 32) | mesh_regs.pipelines[slot].reserved[1];\n'
+     '            };\n'
+     '            // The task program in the vertex slot and its mesh program in the tessellation slot;\n'
+     '            // without a task program, the mesh program in the vertex slot (shader_environment.cpp).\n'
+     '            const bool has_task = mesh_regs.IsShaderConfigEnabled(Maxwell::ShaderType::Tessellation);\n'
+     '            const ::Eden::MeshDiag::Draw shape{has_task ? program(1) : 0, has_task ? program(3) : program(1),\n'
+     '                                               program(5), draw_params.num_vertices};\n'
+     '            static constexpr std::array<u64, 6> no_hashes{};\n'
+     '            ::Eden::MeshDiag::Seen(shape, (prepared_pipeline ? prepared_pipeline->UniqueHashes() : no_hashes).data());\n'
+     '            const bool isolate = ::Eden::MeshDiag::Mode() >= 2;\n'
+     '            scheduler.Record([shape](vk::CommandBuffer cmdbuf) {\n'
+     '                ::Eden::GpuBreadcrumbs::Note(shape.task, shape.mesh, shape.pixel | (u64{shape.groups} << 40));\n'
+     '                cmdbuf.DrawMeshTasksEXT(shape.groups, 1, 1);\n'
+     '            });\n'
+     '            buffer_cache_runtime.CompleteReadbackWriteBatch();\n'
+     '            // After the draw: its render pass ends with the submission (not before it, which\n'
+     '            // would end the render pass PrepareDraw began).\n'
+     '            if (isolate) scheduler.Finish();\n'
+     '            return;\n'
+     '        }\n'
+     '        if (mesh_draw) {\n            static u32 diagnostic_mesh_draws{};'),
 ])
 # Host conditional rendering (VK_EXT_conditional_rendering, dev_vulkan.h hcr_mode): count each
 # decision (EDEN_DEV_GUEST cond= slots 13-19); hcr=exact sends the conditions Eden would draw
@@ -2006,6 +2034,24 @@ for old, new in pipeline_cache_writes:
     if shader_source.count(old) != 1:
         raise RuntimeError(f'Pipeline cache write anchor changed: {old[:60]}')
     shader_source = shader_source.replace(old, new)
+# Task/mesh draw diagnostics (mesh_diag.h, EDEN_MESH_DIAG): the SPIR-V of every stage of a
+# task/mesh pipeline, as the driver receives it.
+for old, new in (
+    ('#include <algorithm>', '#include <algorithm>\n#include "mesh_diag.h"'),
+    ('        device.SaveShader(code);\n',
+     '        device.SaveShader(code);\n'
+     '        if (infos[0] != nullptr && (infos[0]->is_task || infos[0]->is_mesh)) {\n'
+     '            static constexpr std::array mesh_stage_names{"vertex_or_task", "tess_control", "tess_eval_or_mesh",\n'
+     '                                                         "geometry", "fragment"};\n'
+     '            ::Eden::MeshDiag::DumpSpirv(key.unique_hashes[index],\n'
+     '                                        program.info.is_task ? "task" : program.info.is_mesh ? "mesh"\n'
+     '                                                                                     : mesh_stage_names[stage_index],\n'
+     '                                        std::span<const u32>(code.data(), code.size()));\n'
+     '        }\n'),
+):
+    if shader_source.count(old) != 1:
+        raise RuntimeError(f'Mesh diagnostic anchor changed: {old[:60]}')
+    shader_source = shader_source.replace(old, new, 1)
 shader_output = output / 'vk_pipeline_cache_cost.cpp'
 if not shader_output.exists() or shader_output.read_text() != shader_source:
     shader_output.write_text(shader_source)

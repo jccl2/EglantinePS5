@@ -547,6 +547,9 @@ int main(int argc, char** argv) {
                 std::printf("EDEN_ENV %s\n", entry.c_str());
             }
         }
+        // Task/mesh draw diagnostics (mesh_diag.h): their SPIR-V goes beside the crash reports.
+        if (std::getenv("EDEN_MESH_DIAG") != nullptr && std::getenv("EDEN_MESH_DUMP_DIR") == nullptr)
+            setenv("EDEN_MESH_DUMP_DIR", (Eden::LogsDir() + "/mesh").c_str(), 1);
         // Development: some of dev-settings.txt's Vulkan switches (dev_vulkan.h) in any build, from
         // env.txt: EDEN_DEV_VULKAN=robustness2=on,submit_sync=on (comma separated).
         if (const char* switches = std::getenv("EDEN_DEV_VULKAN")) {

@@ -29,8 +29,9 @@
 namespace Eden::GpuBreadcrumbs {
 
 // Sites kept, by id. Large: the CPU keeps recording for a while after the GPU stops (until it
-// waits for a fence), and the stuck command must still be here then. About 13 MiB.
-inline constexpr std::uint32_t kRing = 1u << 20;
+// waits for a fence), and the stuck command must still be here then (the hang on record had
+// 39 commands recorded after the last one the GPU reached). About 18 MiB with the details.
+inline constexpr std::uint32_t kRing = 1u << 19;
 inline constexpr std::size_t kBufferBytes = 256;
 // Offsets in the marker buffer (one 64-byte line each, so the CPU flushes them separately).
 inline constexpr VkDeviceSize kMainReached = 0;
@@ -55,6 +56,12 @@ inline std::atomic<std::uint32_t> next_id{1};
 inline std::atomic<std::uint32_t> upload_id{0}; // last id that also marked the upload buffer
 inline const char* sites[kRing]{};
 inline std::uint8_t kinds[kRing]{}; // 1: main only, 2: main and upload
+// What a command noted about itself while it ran (Note): a task/mesh draw's guest programs and
+// workgroup count (mesh_diag.h): a = task, b = mesh, c = pixel | groups << 40.
+struct Detail {
+    std::uint64_t a, b, c;
+};
+inline Detail details[kRing]{};
 inline std::uint32_t ids[kRing]{};  // which id a slot holds (a later one overwrote it if not)
 
 // After the logical device exists (Scheduler constructor). Leaks its buffer on purpose: it must
@@ -131,6 +138,7 @@ inline void Mark(VkCommandBuffer cmdbuf, VkCommandBuffer upload, const char* sit
     const std::uint32_t id = next_id.fetch_add(1, std::memory_order_relaxed);
     sites[id % kRing] = site;
     ids[id % kRing] = id;
+    details[id % kRing] = {};
     kinds[id % kRing] = upload != VK_NULL_HANDLE ? 2 : 1;
     write_marker(cmdbuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, buffer, kMainReached, id);
     write_marker(cmdbuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, buffer, kMainFinished, id);
@@ -139,6 +147,14 @@ inline void Mark(VkCommandBuffer cmdbuf, VkCommandBuffer upload, const char* sit
         write_marker(upload, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, buffer, kUploadFinished, id);
         upload_id.store(id, std::memory_order_relaxed);
     }
+}
+
+// From inside a recorded command, after Mark: details of the command being recorded (the worker
+// records one command at a time).
+inline void Note(std::uint64_t a, std::uint64_t b, std::uint64_t c) {
+    if (!enabled) return;
+    const std::uint32_t id = next_id.load(std::memory_order_relaxed) - 1;
+    details[id % kRing] = {a, b, c};
 }
 
 // "void Vulkan::Scheduler::Record(T &&) [T = (lambda at .../vk_rasterizer.cpp:330:22)]" -> the
@@ -173,6 +189,16 @@ inline void PrintRange(const char* label, std::uint32_t from, std::uint32_t to) 
         const char* const site = ShortSite(sites[id % kRing]);
         const char* const close = std::strchr(site, ')');
         const int length = close != nullptr ? static_cast<int>(close - site) : static_cast<int>(std::strlen(site));
+        const Detail& detail = details[id % kRing];
+        if (detail.a != 0 || detail.b != 0 || detail.c != 0) {
+            // c: the pixel program's 40-bit address, the workgroup count above it.
+            std::fprintf(stderr, "EDEN_GPU_BREADCRUMB %s id=%u %s%.*s task=0x%llx mesh=0x%llx ps=0x%llx groups=%llu\n",
+                         label, id, kinds[id % kRing] == 2 ? "[+upload] " : "", length, site,
+                         static_cast<unsigned long long>(detail.a), static_cast<unsigned long long>(detail.b),
+                         static_cast<unsigned long long>(detail.c & ((std::uint64_t{1} << 40) - 1)),
+                         static_cast<unsigned long long>(detail.c >> 40));
+            continue;
+        }
         std::fprintf(stderr, "EDEN_GPU_BREADCRUMB %s id=%u %s%.*s\n", label, id,
                      kinds[id % kRing] == 2 ? "[+upload] " : "", length, site);
     }

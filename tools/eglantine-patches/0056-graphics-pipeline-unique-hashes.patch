@@ -1,0 +1,15 @@
+diff --git a/src/video_core/renderer_vulkan/vk_graphics_pipeline.h b/src/video_core/renderer_vulkan/vk_graphics_pipeline.h
+index d3c0899..02d59a2 100644
+--- a/src/video_core/renderer_vulkan/vk_graphics_pipeline.h
++++ b/src/video_core/renderer_vulkan/vk_graphics_pipeline.h
+@@ -110,6 +110,10 @@ public:
+     [[nodiscard]] bool IsMeshPipeline() const noexcept {
+         return stage_infos[0].is_task || stage_infos[0].is_mesh;
+     }
++    /// The guest programs' hashes, per stage slot (the shader cache's names for them).
++    [[nodiscard]] const std::array<u64, 6>& UniqueHashes() const noexcept {
++        return key.unique_hashes;
++    }
+     GraphicsPipeline& operator=(GraphicsPipeline&&) noexcept = delete;
+     GraphicsPipeline(GraphicsPipeline&&) noexcept = delete;
+ 
